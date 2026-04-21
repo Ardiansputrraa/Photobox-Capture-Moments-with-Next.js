@@ -4,6 +4,7 @@ import { useState, useCallback, useRef } from "react";
 import { GridTemplate } from "@/lib/templates";
 import { PhotoFilter } from "@/lib/filters";
 import { PhotoFrame } from "@/lib/frames";
+import { PaperBackground } from "@/lib/backgrounds";
 import { generatePhotoStrip } from "@/lib/canvas";
 
 interface UsePhotoCaptureProps {
@@ -11,6 +12,7 @@ interface UsePhotoCaptureProps {
   filter: PhotoFilter;
   frame: PhotoFrame;
   template: GridTemplate;
+  background: PaperBackground;
 }
 
 interface UsePhotoCaptureReturn {
@@ -29,6 +31,7 @@ export function usePhotoCapture({
   filter,
   frame,
   template,
+  background,
 }: UsePhotoCaptureProps): UsePhotoCaptureReturn {
   const [photos, setPhotos] = useState<string[]>([]);
   const [stripDataUrl, setStripDataUrl] = useState<string | null>(null);
@@ -66,12 +69,12 @@ export function usePhotoCapture({
     if (photos.length === 0) return;
     setIsGenerating(true);
     try {
-      const result = await generatePhotoStrip(photos, template, frame, filter);
+      const result = await generatePhotoStrip(photos, template, frame, filter, background);
       setStripDataUrl(result);
     } finally {
       setIsGenerating(false);
     }
-  }, [photos, template, frame, filter]);
+  }, [photos, template, frame, filter, background]);
 
   const removePhoto = useCallback((index: number) => {
     setPhotos((prev) => prev.filter((_, i) => i !== index));

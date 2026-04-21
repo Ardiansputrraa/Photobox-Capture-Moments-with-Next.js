@@ -1,18 +1,20 @@
 import { GridTemplate } from "./templates";
 import { PhotoFrame } from "./frames";
 import { PhotoFilter } from "./filters";
+import { PaperBackground } from "./backgrounds";
 
 /**
  * Draws all captured photo dataURLs onto a canvas strip
- * applying the selected frame background, gaps, and stickers.
+ * applying the selected background, frame accents, gaps, and stickers.
  */
 export async function generatePhotoStrip(
   photos: string[],
   template: GridTemplate,
   frame: PhotoFrame,
   filter: PhotoFilter,
+  background: PaperBackground,
 ): Promise<string> {
-  const { width, height, slots, padding, gap } = template.canvas;
+  const { width, height, slots, padding } = template.canvas;
 
   const canvas = document.createElement("canvas");
   canvas.width = width;
@@ -20,18 +22,17 @@ export async function generatePhotoStrip(
   const ctx = canvas.getContext("2d");
   if (!ctx) throw new Error("Canvas context unavailable");
 
-  // Draw paper background
-  ctx.fillStyle = frame.paperColor;
-  ctx.fillRect(0, 0, width, height);
+  // ── Draw paper background ───────────────────────────────────────────────
+  drawBackground(ctx, background, width, height);
 
-  // Draw border accents (top & bottom stripes)
+  // ── Draw border accents (top & bottom stripes) ──────────────────────────
   if (frame.id !== "none") {
     ctx.fillStyle = frame.accentColor;
     ctx.fillRect(0, 0, width, 8);
     ctx.fillRect(0, height - 8, width, 8);
   }
 
-  // Load and draw each photo into its slot
+  // ── Load and draw each photo into its slot ──────────────────────────────
   for (let i = 0; i < Math.min(photos.length, slots.length); i++) {
     const slot = slots[i];
     const img = await loadImage(photos[i]);
@@ -42,15 +43,13 @@ export async function generatePhotoStrip(
     roundedRect(ctx, slot.x, slot.y, slot.w, slot.h, 10);
     ctx.clip();
 
-    // Apply CSS filter via canvas ImageData approximation
-    // We draw to offscreen canvas with filter first
+    // Apply CSS filter via offscreen canvas
     const offscreen = document.createElement("canvas");
     offscreen.width = slot.w;
     offscreen.height = slot.h;
     const offCtx = offscreen.getContext("2d");
     if (offCtx) {
       offCtx.filter = filter.cssFilter === "none" ? "" : filter.cssFilter;
-      // Cover-fit the image into the slot
       const { sx, sy, sw, sh } = coverFit(img.width, img.height, slot.w, slot.h);
       offCtx.drawImage(img, sx, sy, sw, sh, 0, 0, slot.w, slot.h);
       ctx.drawImage(offscreen, slot.x, slot.y);
@@ -65,7 +64,7 @@ export async function generatePhotoStrip(
     ctx.stroke();
   }
 
-  // Draw sticker decorations in gaps between photos
+  // ── Draw sticker decorations in the bottom padding area ─────────────────
   if (frame.stickers.length > 0) {
     ctx.font = "18px serif";
     ctx.textAlign = "center";
@@ -76,7 +75,7 @@ export async function generatePhotoStrip(
     });
   }
 
-  // Label at the bottom
+  // ── Label at the bottom ─────────────────────────────────────────────────
   if (frame.id !== "none") {
     ctx.font = "bold 14px Outfit, sans-serif";
     ctx.fillStyle = frame.textColor;
@@ -87,7 +86,117 @@ export async function generatePhotoStrip(
   return canvas.toDataURL("image/png", 0.95);
 }
 
-// Helper: load an image from a dataURL
+// ── Background painters ───────────────────────────────────────────────────────
+
+function drawBackground(
+  ctx: CanvasRenderingContext2D,
+  bg: PaperBackground,
+  width: number,
+  height: number,
+) {
+  switch (bg.type) {
+    case "solid":
+      ctx.fillStyle = bg.color!;
+      ctx.fillRect(0, 0, width, height);
+      break;
+
+    case "gradient": {
+      const grad = ctx.createLinearGradient(0, 0, 0, height);
+      grad.addColorStop(0, bg.gradientStart!);
+      grad.addColorStop(1, bg.gradientEnd!);
+      ctx.fillStyle = grad;
+      ctx.fillRect(0, 0, width, height);
+      break;
+    }
+
+    case "pattern":
+      drawPattern(ctx, bg, width, height);
+      break;
+  }
+}
+
+function drawPattern(
+  ctx: CanvasRenderingContext2D,
+  bg: PaperBackground,
+  width: number,
+  height: number,
+) {
+  // Base colour first
+  ctx.fillStyle = bg.patternBase!;
+  ctx.fillRect(0, 0, width, height);
+
+  ctx.fillStyle = bg.patternMark!;
+
+  switch (bg.patternShape) {
+    case "dots": {
+      const spacing = 24;
+      const radius = 3;
+      for (let y = spacing / 2; y < height; y += spacing) {
+        for (let x = spacing / 2; x < width; x += spacing) {
+          ctx.beginPath();
+          ctx.arc(x, y, radius, 0, Math.PI * 2);
+          ctx.fill();
+        }
+      }
+      break;
+    }
+
+    case "stripes": {
+      const step = 20;
+      ctx.lineWidth = 4;
+      ctx.strokeStyle = bg.patternMark!;
+      ctx.globalAlpha = 0.35;
+      for (let i = -height; i < width + height; i += step) {
+        ctx.beginPath();
+        ctx.moveTo(i, 0);
+        ctx.lineTo(i + height, height);
+        ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
+      break;
+    }
+
+    case "grid": {
+      const step = 24;
+      ctx.lineWidth = 1;
+      ctx.strokeStyle = bg.patternMark!;
+      ctx.globalAlpha = 0.5;
+      for (let x = 0; x <= width; x += step) {
+        ctx.beginPath();
+        ctx.moveTo(x, 0);
+        ctx.lineTo(x, height);
+        ctx.stroke();
+      }
+      for (let y = 0; y <= height; y += step) {
+        ctx.beginPath();
+        ctx.moveTo(0, y);
+        ctx.lineTo(width, y);
+        ctx.stroke();
+      }
+      ctx.globalAlpha = 1;
+      break;
+    }
+
+    case "hearts": {
+      // Draw ♥ symbols as text across the canvas
+      ctx.font = "18px serif";
+      ctx.textAlign = "center";
+      ctx.globalAlpha = 0.25;
+      const step = 32;
+      for (let row = 0, y = step; y < height; y += step, row++) {
+        const offset = row % 2 === 0 ? 0 : step / 2;
+        for (let x = offset; x < width; x += step) {
+          ctx.fillText("♥", x, y);
+        }
+      }
+      ctx.globalAlpha = 1;
+      break;
+    }
+  }
+}
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+
 function loadImage(src: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const img = new Image();
@@ -97,7 +206,6 @@ function loadImage(src: string): Promise<HTMLImageElement> {
   });
 }
 
-// Helper: compute cover-fit crop parameters
 function coverFit(
   imgW: number,
   imgH: number,
@@ -122,7 +230,6 @@ function coverFit(
   return { sx, sy, sw, sh };
 }
 
-// Helper: draw a rounded rectangle path
 function roundedRect(
   ctx: CanvasRenderingContext2D,
   x: number,

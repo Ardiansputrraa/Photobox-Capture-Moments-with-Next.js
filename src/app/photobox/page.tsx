@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback } from "react";
 import Link from "next/link";
 import { Camera, ArrowLeft } from "lucide-react";
 
@@ -13,28 +13,32 @@ import CountdownOverlay from "@/components/photobox/CountdownOverlay";
 import TemplatePicker from "@/components/photobox/TemplatePicker";
 import FramePicker from "@/components/photobox/FramePicker";
 import FilterPicker from "@/components/photobox/FilterPicker";
+import BackgroundPicker from "@/components/photobox/BackgroundPicker";
 import ShutterButton from "@/components/photobox/ShutterButton";
 import PhotoStrip from "@/components/photobox/PhotoStrip";
 
-import { GRID_TEMPLATES, GridId, getTemplate } from "@/lib/templates";
-import { FILTERS, FilterId, getFilter } from "@/lib/filters";
-import { FRAMES, FrameId, getFrame } from "@/lib/frames";
+import { GridId, getTemplate } from "@/lib/templates";
+import { FilterId, getFilter } from "@/lib/filters";
+import { FrameId, getFrame } from "@/lib/frames";
+import { BackgroundId, getBackground } from "@/lib/backgrounds";
 
 export default function PhotoboxPage() {
   const [templateId, setTemplateId] = useState<GridId>("strip-4");
   const [filterId, setFilterId] = useState<FilterId>("none");
   const [frameId, setFrameId] = useState<FrameId>("pastel");
+  const [backgroundId, setBackgroundId] = useState<BackgroundId>("blush");
   const [isShutterFlash, setIsShutterFlash] = useState(false);
   const [isShooting, setIsShooting] = useState(false);
 
   const template = getTemplate(templateId);
   const filter = getFilter(filterId);
   const frame = getFrame(frameId);
+  const background = getBackground(backgroundId);
 
   const { videoRef, stream, error, isReady, isMirrored, startCamera, stopCamera, toggleMirror } = useCamera();
   const { count, isActive: isCountingDown, start: startCountdown } = useCountdown();
   const { photos, stripDataUrl, isGenerating, capturePhoto, generateStrip, removePhoto, reset } =
-    usePhotoCapture({ videoRef, filter, frame, template });
+    usePhotoCapture({ videoRef, filter, frame, template, background });
 
   const handleTemplateChange = useCallback(
     (id: GridId) => {
@@ -120,6 +124,8 @@ export default function PhotoboxPage() {
               <hr className="border-pink-100" />
               <FramePicker selected={frameId} onChange={setFrameId} />
               <hr className="border-pink-100" />
+              <BackgroundPicker selected={backgroundId} onChange={setBackgroundId} />
+              <hr className="border-pink-100" />
               <FilterPicker
                 selected={filterId}
                 onChange={setFilterId}
@@ -161,6 +167,7 @@ export default function PhotoboxPage() {
                 template={template}
                 frame={frame}
                 filter={filter}
+                background={background}
                 isGenerating={isGenerating}
                 onGenerate={generateStrip}
                 onReset={reset}

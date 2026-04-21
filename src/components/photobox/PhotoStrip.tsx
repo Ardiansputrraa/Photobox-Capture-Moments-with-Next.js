@@ -4,6 +4,7 @@ import { Download, RotateCcw, Trash2, Loader2, Image as ImageIcon } from "lucide
 import { GridTemplate } from "@/lib/templates";
 import { PhotoFrame } from "@/lib/frames";
 import { PhotoFilter } from "@/lib/filters";
+import { PaperBackground } from "@/lib/backgrounds";
 
 interface PhotoStripProps {
   photos: string[];
@@ -11,6 +12,7 @@ interface PhotoStripProps {
   template: GridTemplate;
   frame: PhotoFrame;
   filter: PhotoFilter;
+  background: PaperBackground;
   isGenerating: boolean;
   onGenerate: () => void;
   onReset: () => void;
@@ -23,6 +25,7 @@ export default function PhotoStrip({
   template,
   frame,
   filter,
+  background,
   isGenerating,
   onGenerate,
   onReset,
@@ -128,6 +131,12 @@ export default function PhotoStrip({
                 style={{
                   borderColor: frame.accentColor,
                   maxWidth: "240px",
+                  background:
+                    background.type === "solid"
+                      ? background.color
+                      : background.type === "gradient"
+                      ? `linear-gradient(to bottom, ${background.gradientStart}, ${background.gradientEnd})`
+                      : background.patternBase,
                 }}
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
