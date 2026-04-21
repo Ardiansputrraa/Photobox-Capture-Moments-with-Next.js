@@ -9,7 +9,7 @@ const nextConfig: NextConfig = {
    * All pages in this app are client-side only (no server data fetching),
    * so static export works perfectly.
    */
-  output: "export",
+  // output: "export",
 
   /**
    * Adds trailing slashes so /photobox → /photobox/index.html.
