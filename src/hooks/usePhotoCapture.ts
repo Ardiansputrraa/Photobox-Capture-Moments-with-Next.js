@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback } from "react";
 import { GridTemplate } from "@/lib/templates";
 import { PhotoFilter } from "@/lib/filters";
 import { PhotoFrame } from "@/lib/frames";
@@ -34,23 +34,17 @@ export function usePhotoCapture({
   const [stripDataUrl, setStripDataUrl] = useState<string | null>(null);
   const [isCapturing, setIsCapturing] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
 
   const capturePhoto = useCallback((): string | null => {
     const video = videoRef.current;
     if (!video || video.readyState < 2) return null;
 
-    // Use hidden canvas to capture the current frame
-    if (!canvasRef.current) {
-      canvasRef.current = document.createElement("canvas");
-    }
-    const canvas = canvasRef.current;
+    const canvas = document.createElement("canvas");
     canvas.width = video.videoWidth;
     canvas.height = video.videoHeight;
     const ctx = canvas.getContext("2d");
     if (!ctx) return null;
 
-    // Mirror the capture to match the preview
     ctx.save();
     ctx.translate(canvas.width, 0);
     ctx.scale(-1, 1);
@@ -59,6 +53,7 @@ export function usePhotoCapture({
 
     const dataUrl = canvas.toDataURL("image/jpeg", 0.92);
     setPhotos((prev) => [...prev, dataUrl]);
+    setStripDataUrl(null); // invalidate previous strip
     return dataUrl;
   }, [videoRef]);
 
