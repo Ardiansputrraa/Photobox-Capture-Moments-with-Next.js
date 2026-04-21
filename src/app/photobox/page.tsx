@@ -1,193 +1,146 @@
 "use client";
 
-import { useState, useCallback } from "react";
-import Link from "next/link";
-import { Camera, ArrowLeft } from "lucide-react";
+/**
+ * /photobox page — State orchestrator.
+ *
+ * This file only manages application state and wires together the two phases.
+ * All UI rendering lives in:
+ *   → CapturePhase  (src/components/photobox/phases/CapturePhase.tsx)
+ *   → EditPhase     (src/components/photobox/phases/EditPhase.tsx)
+ */
+
+import { useState, useCallback, useEffect } from "react";
+
+import CapturePhase from "@/components/photobox/phases/CapturePhase";
+import EditPhase from "@/components/photobox/phases/EditPhase";
 
 import { useCamera } from "@/hooks/useCamera";
 import { useCountdown } from "@/hooks/useCountdown";
 import { usePhotoCapture } from "@/hooks/usePhotoCapture";
 
-import CameraView from "@/components/photobox/CameraView";
-import CountdownOverlay from "@/components/photobox/CountdownOverlay";
-import TemplatePicker from "@/components/photobox/TemplatePicker";
-import FramePicker from "@/components/photobox/FramePicker";
-import FilterPicker from "@/components/photobox/FilterPicker";
-import BackgroundPicker from "@/components/photobox/BackgroundPicker";
-import ShutterButton from "@/components/photobox/ShutterButton";
-import PhotoStrip from "@/components/photobox/PhotoStrip";
+import { type GridId, getTemplate } from "@/lib/templates";
+import { type FilterId, getFilter } from "@/lib/filters";
+import { type FrameId, getFrame } from "@/lib/frames";
 
-import { GridId, getTemplate } from "@/lib/templates";
-import { FilterId, getFilter } from "@/lib/filters";
-import { FrameId, getFrame } from "@/lib/frames";
-import { BackgroundId, getBackground } from "@/lib/backgrounds";
+type AppStep = "capture" | "edit";
 
 export default function PhotoboxPage() {
+  // ── App flow ──────────────────────────────────────────────────────────────
+  const [step, setStep] = useState<AppStep>("capture");
+
+  // ── User selections ───────────────────────────────────────────────────────
   const [templateId, setTemplateId] = useState<GridId>("strip-4");
   const [filterId, setFilterId] = useState<FilterId>("none");
   const [frameId, setFrameId] = useState<FrameId>("pastel");
-  const [backgroundId, setBackgroundId] = useState<BackgroundId>("blush");
   const [isShutterFlash, setIsShutterFlash] = useState(false);
   const [isShooting, setIsShooting] = useState(false);
 
+  // ── Derived values ────────────────────────────────────────────────────────
   const template = getTemplate(templateId);
   const filter = getFilter(filterId);
   const frame = getFrame(frameId);
-  const background = getBackground(backgroundId);
 
-  const { videoRef, stream, error, isReady, isMirrored, startCamera, stopCamera, toggleMirror } = useCamera();
+  // ── Hooks ─────────────────────────────────────────────────────────────────
+  const {
+    videoRef, error, isReady, isMirrored,
+    startCamera, toggleMirror,
+  } = useCamera();
+
   const { count, isActive: isCountingDown, start: startCountdown } = useCountdown();
-  const { photos, stripDataUrl, isGenerating, capturePhoto, generateStrip, removePhoto, reset } =
-    usePhotoCapture({ videoRef, filter, frame, template, background });
 
+  const {
+    photos, stripDataUrl, isGenerating,
+    capturePhoto, generateStrip, removePhoto, reset,
+  } = usePhotoCapture({ videoRef, filter, frame, template });
+
+  // ── Auto-advance to edit when capture is complete ─────────────────────────
+  const isComplete = photos.length >= template.photoCount;
+  useEffect(() => {
+    if (isComplete && step === "capture") {
+      const timer = setTimeout(() => setStep("edit"), 600);
+      return () => clearTimeout(timer);
+    }
+  }, [isComplete, step]);
+
+  // ── Handlers ──────────────────────────────────────────────────────────────
   const handleTemplateChange = useCallback(
-    (id: GridId) => {
-      setTemplateId(id);
-      reset();
-    },
+    (id: GridId) => { setTemplateId(id); reset(); setStep("capture"); },
     [reset],
   );
 
-  const triggerShutterFlash = () => {
+  const handleShutter = useCallback(async () => {
+    if (isShooting || !isReady || isComplete) return;
+    setIsShooting(true);
+    await startCountdown(3);
     setIsShutterFlash(true);
     setTimeout(() => setIsShutterFlash(false), 400);
-  };
-
-  const handleShutter = useCallback(async () => {
-    if (isShooting || !isReady || photos.length >= template.photoCount) return;
-    setIsShooting(true);
-
-    await startCountdown(3);
-    triggerShutterFlash();
     capturePhoto();
-
     setIsShooting(false);
-  }, [isShooting, isReady, photos.length, template.photoCount, startCountdown, capturePhoto]);
+  }, [isShooting, isReady, isComplete, startCountdown, capturePhoto]);
 
-  const isComplete = photos.length >= template.photoCount;
+  const handleReset = useCallback(() => {
+    reset();
+    setStep("capture");
+  }, [reset]);
+
+  const handleDownload = useCallback(() => {
+    if (!stripDataUrl) return;
+    const a = document.createElement("a");
+    a.href = stripDataUrl;
+    a.download = `photobox-${Date.now()}.png`;
+    a.click();
+  }, [stripDataUrl]);
+
+  // ── Render ────────────────────────────────────────────────────────────────
+  if (step === "capture") {
+    return (
+      <CapturePhase
+        // Camera
+        videoRef={videoRef}
+        isReady={isReady}
+        isMirrored={isMirrored}
+        error={error}
+        onStartCamera={startCamera}
+        onToggleMirror={toggleMirror}
+        // Countdown / shutter
+        count={count}
+        isCountingDown={isCountingDown}
+        isShutterFlash={isShutterFlash}
+        isShooting={isShooting}
+        onShutter={handleShutter}
+        // Template
+        template={template}
+        onTemplateChange={handleTemplateChange}
+        // Filter
+        filter={filter}
+        filterId={filterId}
+        onFilterChange={setFilterId}
+        // Photos
+        photos={photos}
+        onRemovePhoto={removePhoto}
+      />
+    );
+  }
 
   return (
-    <main className="min-h-screen">
-      {/* Background decoration */}
-      <div className="fixed inset-0 -z-10 pointer-events-none overflow-hidden">
-        <div className="absolute -top-20 -right-20 w-64 h-64 rounded-full bg-gradient-to-br from-pink-200/40 to-violet-200/40 blur-3xl" />
-        <div className="absolute -bottom-20 -left-20 w-64 h-64 rounded-full bg-gradient-to-tr from-amber-100/40 to-pink-200/40 blur-3xl" />
-      </div>
-
-      {/* Header */}
-      <header className="flex items-center justify-between px-6 py-4 max-w-6xl mx-auto">
-        <Link
-          href="/"
-          id="back-btn"
-          className="flex items-center gap-2 text-sm text-[var(--text-muted)] hover:text-pink-500 transition-colors"
-        >
-          <ArrowLeft className="w-4 h-4" />
-          Kembali
-        </Link>
-        <div className="flex items-center gap-2">
-          <div className="w-7 h-7 rounded-lg bg-gradient-to-br from-pink-500 to-violet-500 flex items-center justify-center">
-            <Camera className="w-4 h-4 text-white" />
-          </div>
-          <span className="font-outfit font-bold text-transparent bg-clip-text bg-gradient-to-r from-pink-500 to-violet-500">
-            PhotoBox
-          </span>
-        </div>
-      </header>
-
-      {/* Main Layout */}
-      <div className="max-w-6xl mx-auto px-6 pb-12">
-        <div className="grid grid-cols-1 lg:grid-cols-[1fr_360px] gap-6">
-          {/* Left: Camera + Controls */}
-          <div className="space-y-4">
-            {/* Camera */}
-            <div className="relative">
-              <CameraView
-                videoRef={videoRef}
-                isReady={isReady}
-                isMirrored={isMirrored}
-                error={error}
-                filterCss={filter.cssFilter}
-                onStart={startCamera}
-                onToggleMirror={toggleMirror}
-              />
-              <CountdownOverlay count={count} isActive={isCountingDown} />
-
-              {/* Shutter flash */}
-              {isShutterFlash && (
-                <div className="absolute inset-0 rounded-2xl bg-white animate-shutter pointer-events-none z-10" />
-              )}
-            </div>
-
-            {/* Pickers */}
-            <div className="glass rounded-2xl p-4 space-y-5 border border-pink-100">
-              <TemplatePicker selected={templateId} onChange={handleTemplateChange} />
-              <hr className="border-pink-100" />
-              <FramePicker selected={frameId} onChange={setFrameId} />
-              <hr className="border-pink-100" />
-              <BackgroundPicker selected={backgroundId} onChange={setBackgroundId} />
-              <hr className="border-pink-100" />
-              <FilterPicker
-                selected={filterId}
-                onChange={setFilterId}
-                samplePhotoUrl={photos[0]}
-              />
-            </div>
-          </div>
-
-          {/* Right: Shutter + Strip */}
-          <div className="space-y-5">
-            {/* Shutter section */}
-            {!isComplete && (
-              <div className="glass rounded-2xl p-6 border border-pink-100 flex flex-col items-center gap-4">
-                <div className="text-center">
-                  <h2 className="font-outfit font-bold text-lg">
-                    {isComplete ? "🎉 Semua foto sudah!" : "Ambil Foto"}
-                  </h2>
-                  <p className="text-sm text-[var(--text-muted)]">
-                    Template: <span className="text-pink-500 font-semibold">{template.label}</span>
-                    {" · "}
-                    {template.photoCount} foto
-                  </p>
-                </div>
-                <ShutterButton
-                  onClick={handleShutter}
-                  disabled={isShooting || !isReady || isComplete}
-                  currentCount={photos.length}
-                  totalCount={template.photoCount}
-                  isCountingDown={isCountingDown}
-                />
-              </div>
-            )}
-
-            {/* Photo Strip section */}
-            <div className="glass rounded-2xl p-4 border border-pink-100">
-              <PhotoStrip
-                photos={photos}
-                stripDataUrl={stripDataUrl}
-                template={template}
-                frame={frame}
-                filter={filter}
-                background={background}
-                isGenerating={isGenerating}
-                onGenerate={generateStrip}
-                onReset={reset}
-                onRemovePhoto={removePhoto}
-              />
-            </div>
-
-            {/* Tips card */}
-            <div className="rounded-2xl p-4 border border-pink-100 bg-gradient-to-br from-pink-50 to-violet-50">
-              <p className="text-xs text-[var(--text-muted)] font-medium mb-2">💡 Tips</p>
-              <ul className="text-xs text-[var(--text-muted)] space-y-1">
-                <li>• Pastikan pencahayaan cukup untuk hasil terbaik</li>
-                <li>• Ganti template untuk mengubah jumlah & susunan foto</li>
-                <li>• Klik foto thumbnail untuk menghapus & ambil ulang</li>
-                <li>• Filter dapat diubah sebelum generate strip</li>
-              </ul>
-            </div>
-          </div>
-        </div>
-      </div>
-    </main>
+    <EditPhase
+      // Photos & strip
+      photos={photos}
+      stripDataUrl={stripDataUrl}
+      isGenerating={isGenerating}
+      onGenerate={generateStrip}
+      onDownload={handleDownload}
+      onReset={handleReset}
+      // Template
+      template={template}
+      // Theme
+      frame={frame}
+      frameId={frameId}
+      onFrameChange={setFrameId}
+      // Filter
+      filter={filter}
+      filterId={filterId}
+      onFilterChange={setFilterId}
+    />
   );
 }

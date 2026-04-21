@@ -1,76 +1,29 @@
-export type FrameId = "none" | "pastel" | "retro" | "minimal" | "floral" | "y2k";
+/**
+ * frames.ts — Public API barrel
+ * ─────────────────────────────────────────────────────────────────────────────
+ * All imports from "@/lib/frames" resolve here.
+ *
+ * Frame data is organized in ./frames/ subdirectory:
+ *   ./frames/types.ts   → PhotoFrame interface & FrameId / PaperStyle types
+ *   ./frames/themed.ts  → Themed presets (Old Film, Postcard, Hello, Traveling)
+ *   ./frames/classic.ts → Classic presets (Pastel, Retro, Minimal, Floral, Y2K)
+ *
+ * ✏️  To add a frame: edit the appropriate file in ./frames/ — no changes
+ *     needed here.
+ */
 
-export interface PhotoFrame {
-  id: FrameId;
-  label: string;
-  emoji: string;
-  // Background color of the strip paper
-  paperColor: string;
-  // Border/accent color
-  accentColor: string;
-  // Label text color
-  textColor: string;
-  // Decorative sticker characters shown on the strip
-  stickers: string[];
-}
+export type { FrameId, PaperStyle, PhotoFrame } from "./frames/types";
+export { THEMED_FRAMES } from "./frames/themed";
+export { CLASSIC_FRAMES } from "./frames/classic";
 
-export const FRAMES: PhotoFrame[] = [
-  {
-    id: "none",
-    label: "No Frame",
-    emoji: "⬜",
-    paperColor: "#ffffff",
-    accentColor: "#e5e7eb",
-    textColor: "#6b7280",
-    stickers: [],
-  },
-  {
-    id: "pastel",
-    label: "Pastel Dream",
-    emoji: "🌸",
-    paperColor: "#fce7f3",
-    accentColor: "#f9a8d4",
-    textColor: "#be185d",
-    stickers: ["🌸", "💗", "🌷", "✨", "🦋"],
-  },
-  {
-    id: "retro",
-    label: "Retro Film",
-    emoji: "📷",
-    paperColor: "#fefce8",
-    accentColor: "#fcd34d",
-    textColor: "#92400e",
-    stickers: ["📷", "🎞️", "⭐", "🌟", "💛"],
-  },
-  {
-    id: "minimal",
-    label: "Minimal",
-    emoji: "🤍",
-    paperColor: "#f8fafc",
-    accentColor: "#cbd5e1",
-    textColor: "#334155",
-    stickers: ["·", "○", "△", "◇"],
-  },
-  {
-    id: "floral",
-    label: "Floral Garden",
-    emoji: "🌿",
-    paperColor: "#f0fdf4",
-    accentColor: "#86efac",
-    textColor: "#14532d",
-    stickers: ["🌿", "🌻", "🍀", "🌼", "🪷"],
-  },
-  {
-    id: "y2k",
-    label: "Y2K Glam",
-    emoji: "💜",
-    paperColor: "#faf5ff",
-    accentColor: "#c084fc",
-    textColor: "#581c87",
-    stickers: ["💜", "⚡", "🦄", "🌙", "💫", "🔮"],
-  },
-];
+import type { PhotoFrame } from "./frames/types";
+import { THEMED_FRAMES } from "./frames/themed";
+import { CLASSIC_FRAMES } from "./frames/classic";
 
-export function getFrame(id: FrameId): PhotoFrame {
+/** All registered frames — themed first, then classic */
+export const FRAMES: PhotoFrame[] = [...THEMED_FRAMES, ...CLASSIC_FRAMES];
+
+/** Look up a frame by id. Falls back to the first frame if not found. */
+export function getFrame(id: string): PhotoFrame {
   return FRAMES.find((f) => f.id === id) ?? FRAMES[0];
 }
